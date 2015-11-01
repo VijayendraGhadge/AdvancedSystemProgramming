@@ -1,3 +1,11 @@
+///////////////////////////////////////////////////////////////////////////////
+//Signal.c send signals to application and handle them 				//
+// ver 1.0                                                                 									  //
+// Language:    C, Linux 												    	  //
+// Platform:    Dell XPS L520, Core i7, Windows 10, Linux VM           		  //
+// Author:      Vijayendra Ghadge, Syracuse University	                   		  //
+//              (315) 728 8953, vvghadge@syr.edu	                       					  //
+///////////////////////////////////////////////////////////////////////////////
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
