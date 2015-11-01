@@ -38,9 +38,9 @@ void write_to_file(char *s,char * file)
 	close(fd);
 }
 
-void read_from_file(char * file)
+void read_from_file(int fd)
 {
-	int fd=open(file,O_RDONLY);
+	//int fd=open(file,O_RDONLY);
 		if(fd==-1)
 		{
 			perror("Error opening Input file");
@@ -50,8 +50,7 @@ void read_from_file(char * file)
 		{
 			char temp[1000]={0};
 			int nread=0;
-			//printf("\n");
-			while(((nread=read(fd,temp,1000))>0)&&(nread!=1))
+			while(((nread=read(fd,temp,1000))>0)&&(nread!=-1))
 			{
 				printf("%s", temp);
 			}
@@ -62,7 +61,7 @@ void read_from_file(char * file)
 				exit(0);
 			}
 		}
-		close(fd);
+		//close(fd);
 }
 
 
@@ -133,6 +132,8 @@ char out_file[100]={0};
 strcat(out_file,argv[2]);
 char buff [1000]={0};
 
+int fd=open(in_file,O_RDONLY);
+
 while(1)
 {
 	alarm(3);
@@ -158,9 +159,10 @@ while(1)
 	}
 	else
 	{
-		read_from_file(in_file);
+		read_from_file(fd);
+		pause();
 	}
-	pause();
 }
+close(fd);
 return 0;
 }
