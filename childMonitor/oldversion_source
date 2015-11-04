@@ -10,12 +10,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
-#include <sys/times.h>
+#include <time.h>
 #include <sys/wait.h>
 #include <errno.h>
 
+time_t t1=0,t2=0;
 volatile sig_atomic_t flag=0;
-
 void print_usage()
 {
 fprintf(stderr,"\n Usage: ./childMonitor\n");
@@ -55,11 +55,14 @@ static void child_term(int sig,siginfo_t * siginfo,void * context)
 	int temp=0;
 	if(sig==SIGCHLD)
 	{
+	//printf("\n%d",siginfo->si_code);
 	temp=print_error_code(siginfo->si_code);
-
+	//clo=siginfo->si_utime + siginfo->si_stime;
+	//printf("\nChild took:%Lf seconds",(((long double)(clo))/CLOCKS_PER_SEC));
 		if (temp==1)
 		{
 			flag=1;	
+			t2=time(NULL);
 		}
 	}
 	errno=olderrno;
@@ -74,8 +77,6 @@ mysig.sa_sigaction=(void*)child_term;
 mysig.sa_flags=SA_RESTART|SA_SIGINFO;
 sigaction(SIGCHLD,&mysig,NULL);
 child=fork();
-int status;
-clock_t t=0;
 //printf("\n%d",child);
 switch(child)
 {
@@ -93,18 +94,13 @@ switch(child)
 	break;
 
 	default:			//parent will do this
-		//t1=time(NULL);
+		t1=time(NULL);
 		while(flag==0)
 		{
-			wait(&status);
+			pause();
 		}
 
-
-	struct tms buff;
-	times(&buff);
-	t= buff.tms_cutime + buff.tms_cstime;
-
-	printf("\nChild took= %lF seconds\n",((double)t)/sysconf(_SC_CLK_TCK));
+	printf("\nChild took= %d seconds\n",(int)(t2-t1));
 	break;
 
 }
