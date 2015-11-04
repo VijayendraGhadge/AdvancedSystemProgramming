@@ -38,9 +38,9 @@ void write_to_file(char *s,char * file)
 	close(fd);
 }
 
-void read_from_file(int fd)
+off_t read_from_file(char * file,off_t o)
 {
-	//int fd=open(file,O_RDONLY);
+	int fd=open(file,O_RDONLY);
 		if(fd==-1)
 		{
 			perror("Error opening Input file");
@@ -48,22 +48,34 @@ void read_from_file(int fd)
 		}
 		else
 		{
-			char temp[1000]={0};
-			int nread=0;
-			while(((nread=read(fd,temp,1000))>0)&&(nread!=-1))
+
+			off_t cur=lseek(fd,o,SEEK_SET);
+			
+			if(cur==-1)
 			{
-				printf("%s", temp);
-			}
-			if(nread==-1)
-			{
-				close(fd);
-				perror("Error reading input file");
+				perror("Error setting lseek offset");
 				exit(0);
 			}
+			else
+			{
+				char temp[1000]={0};
+				int nread=0;
+				while(((nread=read(fd,temp,1000))>0)&&(nread!=-1))
+				{
+					printf("%s", temp);
+				}
+				if(nread==-1)
+				{
+					close(fd);
+					perror("Error reading input file");
+					exit(0);
+				}
+			cur=lseek(fd,0,SEEK_CUR);
+			close(fd);
+			return cur;
+			}
 		}
-		//close(fd);
 }
-
 
 static void alarm_handle(int sig)
 {
@@ -132,7 +144,7 @@ char out_file[100]={0};
 strcat(out_file,argv[2]);
 char buff [1000]={0};
 
-int fd=open(in_file,O_RDONLY);
+off_t offset=0;
 
 while(1)
 {
@@ -159,10 +171,9 @@ while(1)
 	}
 	else
 	{
-		read_from_file(fd);
+		offset=read_from_file(in_file,offset);
 		pause();
 	}
 }
-close(fd);
 return 0;
 }
