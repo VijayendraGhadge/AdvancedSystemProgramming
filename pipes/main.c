@@ -1,7 +1,7 @@
-#include "stdio.h"
-#include "stdlib.h"
-#include "string.h"
-#include "unistd.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 void print_usage(char * s)
 {
@@ -60,6 +60,31 @@ print_usage(argv[0]);
 return EXIT_FAILURE;
 }
 
+
+pid_t child;
+child=fork();
+int fileds[2];
+pipe(fileds);
+switch(child)
+{
+	case -1:			//Error creating child
+	perror("Error Creating Child");
+	exit(0);
+	break;
+
+	case 0:				//child will do this
+printf("\nChild process");
+//close(fileds[1]);
+execv("/bin/grep",argv);
+	break;
+
+	default:			//parent will do this
+printf("\nParent process");
+//close(fileds[0]);
+execv("/bin/ls",argv);
+	break;
+
+}
 
 
 	return EXIT_SUCCESS;
