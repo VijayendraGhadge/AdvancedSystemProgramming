@@ -80,7 +80,7 @@ switch(child)
 	dup(fds[0]);		//duplicating pipes read end with stdin of parent i.e setting read from pipe and not stdin
 	//i.e make stdin come from read end of pipe
           //  execl("/bin/grep", "grep",argv[1], NULL);
-	ar[0]="grep";
+	ar[0]="/bin/grep";
 	ar[1]=argv[1];
 	ar[2]=NULL;
 	execvp(ar[0],ar);
@@ -93,11 +93,10 @@ switch(child)
 	dup(fds[1]);		//making stdout to go to write-end of pipe
 
 //execl("/bin/ls","ls",NULL);
-	ar[0] = "ls";
+	ar[0] = "/bin/ls";
 	ar[1] = NULL;
     execvp(ar[0],ar);
 	break;
-
 }
 
 return EXIT_SUCCESS;
