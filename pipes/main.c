@@ -63,8 +63,11 @@ return EXIT_FAILURE;
 
 pid_t child;
 child=fork();
-int fileds[2];
-pipe(fileds);
+int fds[1];
+int writefs;
+pipe(fds);
+int status;
+
 switch(child)
 {
 	case -1:			//Error creating child
@@ -73,19 +76,27 @@ switch(child)
 	break;
 
 	case 0:				//child will do this
-printf("\nChild process");
-//close(fileds[1]);
-execv("/bin/grep",argv);
+//printf("\nChild process");
+close(fds[1]);
+//close(fds[1]); //close write side from parents
+           // close(0); //close stdin
+            dup2(0,fds[1]);
+            execl("/bin/grep", "grep", (char *) argv[1]);
+            perror("exec failed!");
+            exit(20);
+//execv("/bin/grep",argv[1]);
 	break;
 
 	default:			//parent will do this
-printf("\nParent process");
-//close(fileds[0]);
-execv("/bin/ls",argv);
+//printf("\nParent process");
+close(fds[0]);
+dup2(1,fds[1]);
+
+execl("/bin/ls","ls",NULL);
 	break;
 
 }
 
-
+wait(&status);
 	return EXIT_SUCCESS;
 }
