@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -60,13 +61,11 @@ print_usage(argv[0]);
 return EXIT_FAILURE;
 }
 
-
+int fds[2];
+pipe(fds);		//creating pipe
+char *ar[80];
 pid_t child;
 child=fork();
-int fds[1];
-int writefs;
-pipe(fds);
-int status;
 
 switch(child)
 {
@@ -76,27 +75,30 @@ switch(child)
 	break;
 
 	case 0:				//child will do this
-//printf("\nChild process");
-close(fds[1]);
-//close(fds[1]); //close write side from parents
-           // close(0); //close stdin
-            dup2(0,fds[1]);
-            execl("/bin/grep", "grep", (char *) argv[1]);
-            perror("exec failed!");
-            exit(20);
+	close(fds[1]);		//closing write end of pipe (unused).
+	close(0);			//closing stdin //current stdin
+	dup(fds[0]);		//duplicating pipes read end with stdin of parent i.e setting read from pipe and not stdin
+	//i.e make stdin come from read end of pipe
+          //  execl("/bin/grep", "grep",argv[1], NULL);
+	ar[0]="grep";
+	ar[1]=argv[1];
+	ar[2]=NULL;
+	execvp(ar[0],ar);
 //execv("/bin/grep",argv[1]);
 	break;
 
 	default:			//parent will do this
-//printf("\nParent process");
-close(fds[0]);
-dup2(1,fds[1]);
+	close(fds[0]);		//closing read end of pipe (unused).
+	close(1);			//closing current stdout
+	dup(fds[1]);		//making stdout to go to write-end of pipe
 
-execl("/bin/ls","ls",NULL);
+//execl("/bin/ls","ls",NULL);
+	ar[0] = "ls";
+	ar[1] = NULL;
+    execvp(ar[0],ar);
 	break;
 
 }
 
-wait(&status);
-	return EXIT_SUCCESS;
+return EXIT_SUCCESS;
 }
