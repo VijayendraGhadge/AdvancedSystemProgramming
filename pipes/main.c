@@ -63,7 +63,7 @@ return EXIT_FAILURE;
 
 int fds[2];
 pipe(fds);		//creating pipe
-char *ar[80];
+char *ar[50];
 pid_t child;
 child=fork();
 
@@ -83,6 +83,7 @@ switch(child)
 	ar[0]="/bin/grep";
 	ar[1]=argv[1];
 	ar[2]=NULL;
+	printf("\n");
 	execvp(ar[0],ar);
 //execv("/bin/grep",argv[1]);
 	break;
