@@ -27,10 +27,32 @@ exit(EXIT_SUCCESS);
 void* write(void* arg)
 {
 	string* shared_mem_name = (string*)arg;
-	size_t i = 0;
-	
-	//push(queue, (void*)i, sizeof(i));
-	
+	int fd;
+	struct stat s;
+	off_t offset
+
+
+	fd=open(shared_mem_name,O_RDONLY);
+	if(fd!=-1)
+	{
+
+	}
+	else
+	{
+	perror("Could not open shared_mem to read to check size");
+		exit(EXIT_FAILURE);	
+	}
+	fd=shm_open(shared_mem_name,O_CREAT|O_RDWR,777);
+	if(fd!=-1)
+	{
+		mmap(NULL,len?,PROT_WRITE|PROT_READ,MAP_SHARED,fd,0);
+	}
+	else
+	{
+		perror("Could not open shared_mem to write");
+		exit(EXIT_FAILURE);
+	}
+
 	return NULL;
 }
 
