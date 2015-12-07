@@ -1,7 +1,7 @@
 #project 3 makefile
 
 hw10: main.c
-	gcc -o proj3 main.c -pthread
+	gcc -o proj3 main.c -pthread -lrt
 
 clean:
 	rm *.o proj3

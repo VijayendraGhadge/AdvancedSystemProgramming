@@ -5,11 +5,19 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <mman.h>
+#include <sys/mman.h>
+#include <semaphore.h>
+#include <pthread.h>
 
-#define FILEPATH "/tmp/group_chat_shm";
 
-static int count=0;
+#define FILEPATH "/group_chat_shm"
+
+pthread_mutex_t mut=PTHREAD_MUTEX_INITIALIZER;     //statically initializing MUTEX
+pthread_cond_t con=PTHREAD_COND_INITIALIZER;       //statically initializing condition variable
+
+sem_t semaphore;
+char sem[10]="vijju";
+//static int count=0;
 
 void print_usage(char * s)
 {
@@ -26,13 +34,14 @@ exit(EXIT_SUCCESS);
 }
 
 
-void* write(void* arg)
+void* writer(void* arg)
 {
 	int fd,res;
 	char * map;
-
 	struct stat sb;
-
+	
+	pthread_mutex_lock (&mut);    //Locking mutex
+	printf("\nWas here");
 
  /* Open a file for writing.
      *  - Creating the file if it doesn't exist.
@@ -47,14 +56,14 @@ void* write(void* arg)
 	exit(EXIT_FAILURE);
     }
 
-    if (fstat(fd, &sb) == -1)           /* To obtain file size */
-               perror("fstat");
-	size_t FILESIZE=sb.st_size;
+  //  if (fstat(fd, &sb) == -1)           /* To obtain file size */
+   //           perror("fstat");
+//	size_t FILESIZE=sb.st_size;
 
 
     /* Stretch the file size to the size of the (mmapped) array of ints
      */
-    res = lseek(fd, FILESIZE-1, SEEK_SET);
+   /* res = lseek(fd, FILESIZE, SEEK_SET);
     if (res == -1) {
 	close(fd);
 	perror("Error calling lseek() to 'stretch' the file");
@@ -71,56 +80,70 @@ void* write(void* arg)
      *  - An empty string is actually a single '\0' character, so a zero-byte
      *    will be written at the last byte of the file.
      */
-    res = write(fd, "", 1);
-    if (result != 1) {
-	close(fd);
-	perror("Error writing last byte ie the empty char to the file");
-	exit(EXIT_FAILURE);
-    }
 
     /* Now the file is ready to be mmapped.
      */
-    map = mmap(0, FILESIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (fstat(fd, &sb) == -1)           /* To obtain file size */
+               perror("fstat");
+	size_t FILESIZE=sb.st_size;
+	if(FILESIZE!=0)
+	{
+    map = mmap(NULL, FILESIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
     if (map == MAP_FAILED) {
 	close(fd);
 	perror("Error mmapping the file");
 	exit(EXIT_FAILURE);
     }
-    
+    }
     /* Now write int's to the file as if it were memory (an array of ints).
      */
-    char *buffer;
-    size_t bufsize = 1000;
-    size_t characters;
+    char buffer[1000];
     int exit_cond=1;
-    buffer = (char *)malloc(bufsize * sizeof(char));
-    /*if( buffer == NULL)
-    {
-        perror("Unable to allocate buffer");
-        exit(1);
-    }*/
     
+    pthread_mutex_unlock (&mut);     //unlocking mutex.
     do
     {
-    characters = getline(&buffer,&bufsize,stdin);
-    //printf("%zu characters were read.\n",characters);
-    //printf("You typed: '%s'\n",buffer);
-    exit_cond=strcmp(buffer,"exit");
+
+    if(fgets(buffer,999,stdin)==NULL)
+		{
+			
+			perror("\nscanning stdin fail\n");
+			exit(0);
+		}	
+    exit_cond=strcmp(buffer,"exit\n");
+
     if(exit_cond!=0)
-    	{	
+    	{	pthread_mutex_lock (&mut);    //Locking mutex
     		pid_t pid=getpid();
-    		char*line_to_write;
+    		char line_to_write[1000];
     		//strncpy(line_to_write,itoa(pid,line_to_write,10));
-    		itoa(pid,line_to_write,10);
+    		//itoa(pid,line_to_write,10);
+    		sprintf(line_to_write,"%d",pid);
+    		strcat(line_to_write," ");
     		strcat(line_to_write,buffer);
-    		strcpy(map,line_to_write);
+    		//strcat(line_to_write,"\n");
+
+    		res = write(fd, line_to_write, strlen(line_to_write));
+    		if (res != strlen(line_to_write)) {
+			close(fd);
+			perror("Error writing last byte ie the empty char to the file");
+			exit(EXIT_FAILURE);
+    		}
+
+    		pthread_cond_signal(&con);       //signalling waiting condition variables
+    		pthread_mutex_unlock (&mut);     //unlocking mutex.
+    		sem_post(&semaphore);
+
     	}
-	}while(exit_cond!=0)
+	}while(exit_cond!=0);
 
 
 
     /* Don't forget to free the mmapped memory
      */
+	if (fstat(fd, &sb) == -1)           /* To obtain file size */
+               perror("fstat");
+	FILESIZE=sb.st_size;
     if (munmap(map, FILESIZE) == -1) {
 	perror("Error un-mmapping the file");
 	close(fd);
@@ -137,110 +160,95 @@ void* write(void* arg)
 	return NULL;
 }
 
-void* read(void* arg)
+void* reader(void* arg)
 {
 	
 	int fd,res;
 	int lines_read=0;
 	char * map;
+	struct stat sb;
 
- /* Open a file for writing.
-     *  - Creating the file if it doesn't exist.
-     *  - Truncating it to 0 size if it already exists. (not really needed)
-     *
-     * Note: "O_WRONLY" mode is not sufficient when mmaping.
-     */
-    //fd = open(FILEPATH, O_RDWR | O_CREAT, (mode_t)0600);
-    fd=shm_open(FILEPATH,O_CREAT|O_RDONLY,(mode_t)0600);
+	do
+    {    
+    	sem_wait(&semaphore);
+	pthread_mutex_lock (&mut);    //Locking mutex	
+    fd=shm_open(FILEPATH,O_RDWR,0);
+    //fd = open(FILEPATH, O_RDWR | O_CREAT,(mode_t)0600);
+    
     if (fd == -1) {
-	perror("Error opening file for writing");
-	exit(EXIT_FAILURE);
+	//perror("Error opening file for reading");
+	//exit(EXIT_FAILURE);
+  	pthread_cond_wait(&con,&mut);    //waiting for condition varible.  	
+  	pthread_mutex_unlock (&mut);     //unlocking mutex.
+  	continue;
     }
 
-    /* Stretch the file size to the size of the (mmapped) array of ints
-     */
-    res = lseek(fd, FILESIZE-1, SEEK_SET);
-    if (res == -1) {
-	close(fd);
-	perror("Error calling lseek() to 'stretch' the file");
-	exit(EXIT_FAILURE);
-    }
-    
-    /* Something needs to be written at the end of the file to
-     * have the file actually have the new size.
-     * Just writing an empty string at the current file position will do.
-     *
-     * Note:
-     *  - The current position in the file is at the end of the stretched 
-     *    file due to the call to lseek().
-     *  - An empty string is actually a single '\0' character, so a zero-byte
-     *    will be written at the last byte of the file.
-     */
-    
-    /* Now the file is ready to be mmapped.
-     */
-    /*
-    map = mmap(0, FILESIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (fstat(fd, &sb) == -1) perror("fstat");
+	int FILESIZE=sb.st_size;
+  	if(FILESIZE==0)
+  	{
+  	//	perror("file size is 0");
+  	pthread_cond_wait(&con,&mut);    //waiting for condition varible.
+  	pthread_mutex_unlock (&mut);     //unlocking mutex.
+  	continue;
+  	}
+  	if (fstat(fd, &sb) == -1) perror("fstat");
+  	FILESIZE=sb.st_size;
+  	if (FILESIZE<=lines_read*sizeof(char))
+  	{
+  			//perror("shared mem has been read completely");
+  	pthread_cond_wait(&con,&mut);    //waiting for condition varible.
+  	pthread_mutex_unlock (&mut);     //unlocking mutex.
+  	continue;
+  	}
+  	if (fstat(fd, &sb) == -1) perror("fstat");
+  	FILESIZE=sb.st_size;
+    map = mmap(NULL, FILESIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
     if (map == MAP_FAILED) {
 	close(fd);
-	perror("Error mmapping the file");
+	perror("Error mmapping the file for reading");
 	exit(EXIT_FAILURE);
     }
-    /* Now write int's to the file as if it were memory (an array of ints).
-     */
-    char *buffer;
-    size_t bufsize = 32;
-    size_t characters;
-    int exit_cond=1;
-    buffer = (char *)malloc(bufsize * sizeof(char));
-    /*if( buffer == NULL)
-    {
-        perror("Unable to allocate buffer");
-        exit(1);
-    }*/
-    if(res>lines_read)
-    {
+	
+	printf("%s\n",map+lines_read);
+	lines_read=strlen(map);
+	//lines_read=lseek(fd,0,SEEK_CUR);
+	//printf("\n%d\n", lines_read);
+	//close(fd);
+	pthread_mutex_unlock (&mut);     //unlocking mutex.
+	sem_post(&semaphore);
 
-    }
-    do
-    {
-    characters = getline(&buffer,&bufsize,stdin);
-    //printf("%zu characters were read.\n",characters);
-    //printf("You typed: '%s'\n",buffer);
-    exit_cond=strcmp(buffer,"exit");
-    if(exit_cond!=0)
-    	{	
-    		pid_t pid=getpid();
-    		char*line_to_write;
-    		strncpy(line_to_write,itoa(pid,line_to_write,10));
-    		strcat(line_to_write,buffer);
-    		strcpy(map,line_to_write);
-    	}
-	}while(exit_cond!=0)
-
-
-
-    /* Don't forget to free the mmapped memory
-     *//*
-    if (munmap(map, FILESIZE) == -1) {
-	perror("Error un-mmapping the file");
+    /*res = lseek(fd, lines_read, SEEK_SET);
+    if (res == -1) {
 	close(fd);
+	perror("Error calling lseek() to 'stretch' the file in reader");
 	exit(EXIT_FAILURE);
-    }*/
-    	/* Decide here whether to close(fd) and exit() or not. Depends... */
-
-    /* Un-mmaping doesn't close the file, so we still need to do that.
-     */
-    close(fd);
-    exit(EXIT_SUCCESS);
-
+    }
+    char temp[1000];
+    int nread=0;
+				while(((nread=read(fd,temp,1000))>0)&&(nread!=-1))
+				{
+					printf("%s", temp);
+				}
+				if(nread==-1)
+				{
+					close(fd);
+					perror("Error reading sharedmem_file");
+					exit(0);
+				}
+				if(nread==0)
+				{
+					lines_read=lseek(fd,0,SEEK_CUR);
+					close(fd);
+					printf("\nread was here and waiting");
+					pthread_cond_wait(&con,&mut);    //waiting for condition varible.
+					pthread_mutex_unlock (&mut);     //unlocking mutex.
+					printf("\nread was here and now continuing");
+				}
+*/
+	}while(1);
 
 	return NULL;
-}
-
-bool increment_count()
-{
-
 }
 
 int main(int argc, char* argv[])
@@ -277,13 +285,15 @@ return EXIT_FAILURE;
 
 	pthread_t read_th, write_th;
 	int err;
-
-	err=pthread_create(&write_th,NULL,&write,NULL);
+	sem_open(sem,O_CREAT|O_RDWR);
+	err=pthread_create(&write_th,NULL,&writer,NULL);
 	if(err!=0)perror("Error creating producer thread");
-	err=pthread_create(&read_th,NULL,&read,NULL);
+	err=pthread_create(&read_th,NULL,&reader,NULL);
 	if(err!=0)perror("Error creating consumer thread");
 	pthread_join(read_th,NULL);
 	pthread_join(write_th,NULL);
+	sem_close(&semaphore);
+	sem_unlink(sem);
 
 	return EXIT_SUCCESS;
 }

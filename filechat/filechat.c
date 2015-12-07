@@ -154,15 +154,9 @@ while(1)
 		//if(scanf("%999s",buff)!=1)
 		if(fgets(buff,999,stdin)==NULL)
 		{
-			if(errno==EINTR)
-			{
-				continue;
-			}
-			else
-			{
-			perror("\nscanf fail\n");
+			
+			perror("\nscanning stdin fail\n");
 			exit(0);
-			}
 		}	
 		else
 		{
