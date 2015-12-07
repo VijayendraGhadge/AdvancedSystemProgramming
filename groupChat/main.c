@@ -16,7 +16,7 @@ pthread_mutex_t mut=PTHREAD_MUTEX_INITIALIZER;     //statically initializing MUT
 pthread_cond_t con=PTHREAD_COND_INITIALIZER;       //statically initializing condition variable
 
 sem_t semaphore;
-char sem[10]="vijju";
+static char sem[10]="vijju";
 //static int count=0;
 
 void print_usage(char * s)
@@ -41,8 +41,7 @@ void* writer(void* arg)
 	struct stat sb;
 	
 	pthread_mutex_lock (&mut);    //Locking mutex
-	printf("\nWas here");
-
+	
  /* Open a file for writing.
      *  - Creating the file if it doesn't exist.
      *  - Truncating it to 0 size if it already exists. (not really needed)
@@ -114,6 +113,7 @@ void* writer(void* arg)
 
     if(exit_cond!=0)
     	{	pthread_mutex_lock (&mut);    //Locking mutex
+    		sem_post(&semaphore);
     		pid_t pid=getpid();
     		char line_to_write[1000];
     		//strncpy(line_to_write,itoa(pid,line_to_write,10));
@@ -132,7 +132,8 @@ void* writer(void* arg)
 
     		pthread_cond_signal(&con);       //signalling waiting condition variables
     		pthread_mutex_unlock (&mut);     //unlocking mutex.
-    		sem_post(&semaphore);
+    		
+    		sem_wait(&semaphore);
 
     	}
 	}while(exit_cond!=0);
