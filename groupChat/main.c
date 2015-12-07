@@ -15,9 +15,8 @@
 pthread_mutex_t mut=PTHREAD_MUTEX_INITIALIZER;     //statically initializing MUTEX
 pthread_cond_t con=PTHREAD_COND_INITIALIZER;       //statically initializing condition variable
 
-sem_t semaphore;
-static char sem[10]="vijju";
-//static int count=0;
+sem_t * semaphore;
+static char sem[10];
 
 void print_usage(char * s)
 {
@@ -113,7 +112,7 @@ void* writer(void* arg)
 
     if(exit_cond!=0)
     	{	pthread_mutex_lock (&mut);    //Locking mutex
-    		sem_post(&semaphore);
+    		sem_wait(semaphore);
     		pid_t pid=getpid();
     		char line_to_write[1000];
     		//strncpy(line_to_write,itoa(pid,line_to_write,10));
@@ -132,8 +131,8 @@ void* writer(void* arg)
 
     		pthread_cond_signal(&con);       //signalling waiting condition variables
     		pthread_mutex_unlock (&mut);     //unlocking mutex.
+    		sem_post(semaphore);
     		
-    		sem_wait(&semaphore);
 
     	}
 	}while(exit_cond!=0);
@@ -171,7 +170,7 @@ void* reader(void* arg)
 
 	do
     {    
-    	sem_wait(&semaphore);
+    	sem_wait(semaphore);
 	pthread_mutex_lock (&mut);    //Locking mutex	
     fd=shm_open(FILEPATH,O_RDWR,0);
     //fd = open(FILEPATH, O_RDWR | O_CREAT,(mode_t)0600);
@@ -217,7 +216,7 @@ void* reader(void* arg)
 	//printf("\n%d\n", lines_read);
 	//close(fd);
 	pthread_mutex_unlock (&mut);     //unlocking mutex.
-	sem_post(&semaphore);
+	sem_post(semaphore);
 
     /*res = lseek(fd, lines_read, SEEK_SET);
     if (res == -1) {
@@ -286,14 +285,14 @@ return EXIT_FAILURE;
 
 	pthread_t read_th, write_th;
 	int err;
-	sem_open(sem,O_CREAT|O_RDWR);
+	semaphore=sem_open(sem,O_CREAT|O_RDWR,(mode_t)0600,1);
 	err=pthread_create(&write_th,NULL,&writer,NULL);
 	if(err!=0)perror("Error creating producer thread");
 	err=pthread_create(&read_th,NULL,&reader,NULL);
 	if(err!=0)perror("Error creating consumer thread");
 	pthread_join(read_th,NULL);
 	pthread_join(write_th,NULL);
-	sem_close(&semaphore);
+	sem_close(semaphore);
 	sem_unlink(sem);
 
 	return EXIT_SUCCESS;
