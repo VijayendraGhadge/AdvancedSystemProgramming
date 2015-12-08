@@ -9,26 +9,19 @@
 #include <semaphore.h>
 #include <pthread.h>
 
+
 #define FILEPATH "/group_chat_shm"
-#define WSEM "/wsem"
+#define SEM "/sem"
 #define RSEM "/rsem"
 #define COUNT "/count"
+//pthread_mutex_t mut=PTHREAD_MUTEX_INITIALIZER;     //statically initializing MUTEX
+//pthread_cond_t con=PTHREAD_COND_INITIALIZER;       //statically initializing condition variable
 
-sem_t * wsem;
+sem_t * semaphore;
 sem_t * rsem;
 sem_t * count;
 
-void broadcast()
-{
-  int temp=100;  
-  int i;
-  sem_getvalue(count,&temp);
-  for (i = 0; i < temp; ++i)
-  {
-    sem_post(rsem);
-    usleep(100);
-  }
-}
+
 
 void ex(void)
 {
@@ -39,7 +32,7 @@ void ex(void)
   {
     shm_unlink(FILEPATH);
     sem_unlink(RSEM);
-    sem_unlink(WSEM);
+    sem_unlink(SEM);
     sem_unlink(COUNT);
   }
 }
@@ -58,28 +51,6 @@ fprintf(stderr, "\nTO EXIT THE PROGRAM TYPE in 'exit' \n");
 exit(EXIT_SUCCESS);
 }
 
-int isSelfMsg(char * s)
-{
-  int i;
-  pid_t pid=getpid();
-  char spid[1000];
-  sprintf(spid,"%d",pid);
-  for (i = 0; i < strlen(spid); ++i)
-  {
-   // printf("%c\t%c\n",s[i],spid[i]);
-    if(s[i]==spid[i])
-    {
-      continue;
-    }
-    else
-    {//printf("returning 0\n");
-      return 0;
-      break;
-    }
-  }
-  //printf("returning 1\n");
-  return 1;
-}
 
 void* writer(void* arg)
 {
@@ -91,19 +62,18 @@ void* writer(void* arg)
   {
     char buffer[1000];
 
-    if(fgets(buffer,998,stdin)==NULL)
-    {     
+    if(fgets(buffer,999,stdin)==NULL)
+    {
+      
       perror("\nscanning stdin fail\n");
       exit(0);
-    }
-    sem_wait(wsem); 
+    } 
     exit_cond=strcmp(buffer,"exit\n");
     if(exit_cond!=0)
     { 
 	   
       fd=shm_open(FILEPATH,O_CREAT|O_RDWR,(mode_t)0600);
-      if (fd == -1) 
-      {
+      if (fd == -1) {
 	     perror("Error opening file for writing");
 	     exit(EXIT_FAILURE);
       }
@@ -112,12 +82,14 @@ void* writer(void* arg)
       size_t FILESIZE=sb.st_size;
 	       if(FILESIZE!=0)
 	       { 
+          sem_wait(semaphore);
+       // pthread_mutex_lock (&mut);    //Locking mutex
           map = mmap(NULL, FILESIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
           if (map == MAP_FAILED) 
           {
           close(fd);
           perror("Error mmapping the file");
-	        exit(EXIT_FAILURE);
+	         exit(EXIT_FAILURE);
           }
           res = lseek(fd, FILESIZE, SEEK_SET);
           if (res == -1) 
@@ -129,9 +101,12 @@ void* writer(void* arg)
          }		
     		pid_t pid=getpid();
     		char line_to_write[1000];
+    		//strncpy(line_to_write,itoa(pid,line_to_write,10));
+    		//itoa(pid,line_to_write,10);
     		sprintf(line_to_write,"%d",pid);
     		strcat(line_to_write," ");
     		strcat(line_to_write,buffer);
+    		//strcat(line_to_write,"\n");
     		res = write(fd, line_to_write, strlen(line_to_write));
     		if (res != strlen(line_to_write)) 
         {
@@ -140,21 +115,28 @@ void* writer(void* arg)
           exit(EXIT_FAILURE);
     		}
     }
-    broadcast();
-    sem_post(wsem);
+    		
+        //pthread_cond_signal(&con);       //signalling waiting condition variables
+    		//pthread_mutex_unlock (&mut);     //unlocking mutex.
+   //     sem_post(rsem);
+        sem_post(semaphore);
 	}while(exit_cond!=0);
 
+
+
+    /* Don't forget to free the mmapped memory
+     */
 	if (fstat(fd, &sb) == -1) perror("fstat");
 	size_t FILESIZE=sb.st_size;
-  if (munmap(map, FILESIZE) == -1) 
-  {
+    if (munmap(map, FILESIZE) == -1) {
 	perror("Error un-mmapping the file");
 	close(fd);
 	exit(EXIT_FAILURE);
-  }
-  close(fd);
+    }
+    close(fd);
     
-  exit(EXIT_SUCCESS);
+    exit(EXIT_SUCCESS);
+
 	return NULL;
 }
 
@@ -167,13 +149,22 @@ void* reader(void* arg)
 	struct stat sb;
 
 	do
-  {    
-    sem_wait(rsem);
+    {    
+	//sem_wait(semaphore);
+ //   sem_wait(rsem);
+  //pthread_mutex_lock (&mut);    //Locking mutex	
     fd=shm_open(FILEPATH,O_RDWR,0);
-    if (fd == -1) 
-    {
-      perror("File not created");
-    close(fd);  //file dosent exist yet.
+    //fd = open(FILEPATH, O_RDWR | O_CREAT,(mode_t)0600);
+    
+    if (fd == -1) {
+	//perror("Error opening file for reading");
+	//exit(EXIT_FAILURE);
+    //pthread_mutex_unlock (&mut);     //unlocking mutex.
+      close(fd);
+    //sem_post(semaphore);
+     // sem_post(rsem);
+    //pthread_cond_wait(&con,&mut);    //waiting for condition varible.  
+      
   	continue;
     }
 
@@ -181,37 +172,45 @@ void* reader(void* arg)
 	  int FILESIZE=sb.st_size;
   	if(FILESIZE==0)
   	{
-      perror("file size 0");
+  	//	perror("file size is 0");
+    //pthread_mutex_unlock (&mut);     //unlocking mutex.
       close(fd);
-      continue;
+      //sem_post(rsem);
+    //sem_post(semaphore);
+    continue;
+    //pthread_cond_wait(&con,&mut);    //waiting for condition varible.    	continue;
   	}
   	if (fstat(fd, &sb) == -1) perror("fstat");
   	FILESIZE=sb.st_size;
   	if (FILESIZE<=lines_read*sizeof(char))
   	{
-    // perror("memory already read"); 
+  			//perror("shared mem has been read completely");
+    //pthread_mutex_unlock (&mut);     //unlocking mutex.
     close(fd);
+    //sem_post(rsem);
+    //sem_post(semaphore);
+    //pthread_cond_wait(&con,&mut);    //waiting for condition varible.     continue;
   	continue;
-
   	}
   	if (fstat(fd, &sb) == -1) perror("fstat");
   	FILESIZE=sb.st_size;
     map = mmap(NULL, FILESIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-    if (map == MAP_FAILED) 
-    {
+    if (map == MAP_FAILED) {
       close(fd);
       perror("Error mmapping the file for reading");
     	exit(EXIT_FAILURE);
-    }
-    char temp[1000];
-    strcpy(temp,map+lines_read);
-	  if(isSelfMsg(temp)==0)
-    {
-	   printf("%s\n",temp);
-    }
-	 lines_read=strlen(map);
-    close(fd);
-  // sem_post(rsem);
+      }
+	
+	printf("%s\n",map+lines_read);
+	lines_read=strlen(map);
+  close(fd); //////////////////////////////////////////////last change
+	//lines_read=lseek(fd,0,SEEK_CUR);
+	//printf("\n%d\n", lines_read);
+	
+  //sem_post(semaphore);
+    //pthread_mutex_unlock (&mut);     //unlocking mutex.
+    //sem_post(semaphore);
+  //sem_post(rsem);
 	}while(1);
 
 	return NULL;
@@ -254,7 +253,7 @@ return EXIT_FAILURE;
 	int err;
   count=sem_open(COUNT,O_CREAT|O_RDWR,(mode_t)0644,0);
   sem_post(count);
-	wsem=sem_open(WSEM,O_CREAT|O_RDWR,(mode_t)0644,1);
+	semaphore=sem_open(SEM,O_CREAT|O_RDWR,(mode_t)0644,1);
   rsem=sem_open(RSEM,O_CREAT|O_RDWR,(mode_t)0644,0);
 	err=pthread_create(&write_th,NULL,&writer,NULL);
 	if(err!=0)perror("Error creating producer thread");
