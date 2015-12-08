@@ -66,25 +66,23 @@ int isSelfMsg(char * s)
   sprintf(spid,"%d",pid);
   for (i = 0; i < strlen(spid); ++i)
   {
-   // printf("%c\t%c\n",s[i],spid[i]);
     if(s[i]==spid[i])
     {
       continue;
     }
     else
-    {//printf("returning 0\n");
+    {
       return 0;
       break;
     }
   }
-  //printf("returning 1\n");
   return 1;
 }
 
 void* writer(void* arg)
 {
 	int fd,res;
-	char * map;
+	char * map=NULL;
 	struct stat sb;
   int exit_cond=1;
   do
@@ -146,11 +144,14 @@ void* writer(void* arg)
 
 	if (fstat(fd, &sb) == -1) perror("fstat");
 	size_t FILESIZE=sb.st_size;
+  if(map!=NULL)
+  {
   if (munmap(map, FILESIZE) == -1) 
   {
-	perror("Error un-mmapping the file");
+	perror("Error un-mmapping the file ");
 	close(fd);
 	exit(EXIT_FAILURE);
+  }
   }
   close(fd);
     
@@ -211,7 +212,6 @@ void* reader(void* arg)
     }
 	 lines_read=strlen(map);
     close(fd);
-  // sem_post(rsem);
 	}while(1);
 
 	return NULL;
