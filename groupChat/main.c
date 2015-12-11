@@ -26,7 +26,7 @@ void broadcast()
   for (i = 0; i < temp; ++i)
   {
     sem_post(rsem);
-    usleep(100);
+    usleep(1);
   }
 }
 
