@@ -77,7 +77,9 @@ int isSelfMsg(char * s)
 
 void* writer(void* arg)
 {
-	int fd,res;
+  struct stat sb;
+	int res;
+  mqd_t fd;
   int exit_cond=1;
   do
   {
@@ -97,10 +99,10 @@ void* writer(void* arg)
       {
 	     perror("Error opening queue for writing");
 	     exit(EXIT_FAILURE);
-      }///////////////////////////////////////////////////////was here resume
+      }
 
       if (fstat(fd, &sb) == -1) perror("fstat");
-      size_t FILESIZE=sb.st_size;
+/*      size_t FILESIZE=sb.st_size;
 	       if(FILESIZE!=0)
 	       { 
           map = mmap(NULL, FILESIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
@@ -130,27 +132,22 @@ void* writer(void* arg)
           perror("Error writing last byte ie the empty char to the file");
           exit(EXIT_FAILURE);
     		}
-    }
+    }*/
    // broadcast();
+        res=mq_send(fd,buffer,strlen(buffer),1); /////////pronbably notify
+        if(res==-1)
+          {
+            perror("Send error");
+            exit(EXIT_FAILURE);
+          }
 	}while(exit_cond!=0);
 
-	if (fstat(fd, &sb) == -1) perror("fstat");
-	size_t FILESIZE=sb.st_size;
-  if(map!=NULL)
-  {
-  if (munmap(map, FILESIZE) == -1) 
-  {
-	perror("Error un-mmapping the file ");
 	close(fd);
-	exit(EXIT_FAILURE);
-  }
-  }
-  close(fd);
     
   exit(EXIT_SUCCESS);
 	return NULL;
 }
-
+///////////////////////////////////////////////////////was here resume
 void* reader(void* arg)
 {
 	
