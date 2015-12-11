@@ -10,33 +10,14 @@
 #include <mqueue.h>
 
 #define MNAME "/mq"
-/*
-#define FILEPATH "/group_chat_shm"
-#define WSEM "/wsem"
-#define RSEM "/rsem"
-#define COUNT "/count"
 
-sem_t * wsem;
-sem_t * rsem;
-sem_t * count;
-*/
-/*
-void broadcast()
-{
-  int temp=100;  
-  int i;
-  sem_getvalue(count,&temp);
-  for (i = 0; i < temp; ++i)
-  {
-    sem_post(rsem);
-    usleep(1);
-  }
-}*/
+void handler (int sig_num) {
+    printf ("Received sig %d.\n", sig_num);
+}
 
 void ex(void)
 {
-  
-    mq_unlink(MNAME);
+   mq_unlink(MNAME);
 }
 
 void print_usage(char * s)
@@ -52,35 +33,15 @@ fprintf(stderr,"\n The program %s is used to demonstrate use of posix message qu
 fprintf(stderr, "\nTO EXIT THE PROGRAM TYPE in 'quit' \n");
 exit(EXIT_SUCCESS);
 }
-/*
-int isSelfMsg(char * s)
-{
-  int i;
-  pid_t pid=getpid();
-  char spid[1000];
-  sprintf(spid,"%d",pid);
-  for (i = 0; i < strlen(spid); ++i)
-  {
-    if(s[i]==spid[i])
-    {
-      continue;
-    }
-    else
-    {
-      return 0;
-      break;
-    }
-  }
-  return 1;
-}
-*/
 
 void* writer(void* arg)
 {
   struct stat sb;
+  struct mq_attr attr;
 	int res;
   mqd_t fd;
   int exit_cond=1;
+
   do
   {
     char buffer[1000];
@@ -95,10 +56,21 @@ void* writer(void* arg)
     { 
 	   
       fd=mq_open(MNAME,O_WRONLY);
-      if (fd == -1) 
+      if (fd == (mqd_t)-1) 
       {
 	     perror("Error opening queue for writing");
 	     exit(EXIT_FAILURE);
+      }
+      if(mq_getattr(fd,&attr)==-1)
+      {
+        perror("mq_getattr errored");
+        exit(EXIT_FAILURE);
+      }
+      attr.mq_flags|=O_NONBLOCK;
+      if (mq_setattr(fd,&attr,NULL)==-1)
+      {
+        perror("mq_setattr failed");
+        exit(EXIT_FAILURE);
       }
 
       if (fstat(fd, &sb) == -1) perror("fstat");
@@ -134,15 +106,25 @@ void* writer(void* arg)
     		}
     }*/
    // broadcast();
+        printf("before write\n");
         res=mq_send(fd,buffer,strlen(buffer),1); /////////pronbably notify
+        printf("%d\n", res);
         if(res==-1)
           {
             perror("Send error");
             exit(EXIT_FAILURE);
           }
+          if(res==0)
+          {
+            printf("Successful write to mq\n");
+          }
+          close(fd);
+
+
+    }
 	}while(exit_cond!=0);
 
-	close(fd);
+	
     
   exit(EXIT_SUCCESS);
 	return NULL;
@@ -150,56 +132,52 @@ void* writer(void* arg)
 ///////////////////////////////////////////////////////was here resume
 void* reader(void* arg)
 {
-	
-	int fd,res;
-	int lines_read=0;
-	char * map;
-	struct stat sb;
 
-	do
-  {    
-    sem_wait(rsem);
-    fd=shm_open(FILEPATH,O_RDWR,0);
-    if (fd == -1) 
-    {
-      perror("File not created");
-    close(fd);  //file dosent exist yet.
-  	continue;
-    }
+	int res;
+  mqd_t fd;
+   struct mq_attr attr;
+	//int lines_read=0;
+	//struct stat sb;
 
-    if (fstat(fd, &sb) == -1) perror("fstat");
-	  int FILESIZE=sb.st_size;
-  	if(FILESIZE==0)
-  	{
-      perror("file size 0");
-      close(fd);
-      continue;
-  	}
-  	if (fstat(fd, &sb) == -1) perror("fstat");
-  	FILESIZE=sb.st_size;
-  	if (FILESIZE<=lines_read*sizeof(char))
-  	{
-    // perror("memory already read"); 
-    close(fd);
-  	continue;
+	  do
+    { 
+    fd=mq_open(MNAME,O_RDONLY);
+    
+     if (fd == (mqd_t)-1) 
+      {
+      perror("Queue opening in read failed");
+       exit(EXIT_FAILURE);
+      }
+      if(mq_getattr(fd,&attr)==-1)
+      {
+        perror("mq_getattr errored");
+        exit(EXIT_FAILURE);
+      }
+      attr.mq_flags|=O_NONBLOCK;
+      if (mq_setattr(fd,&attr,NULL)==-1)
+      {
+        perror("mq_setattr failed");
+        exit(EXIT_FAILURE);
+      }
 
-  	}
-  	if (fstat(fd, &sb) == -1) perror("fstat");
-  	FILESIZE=sb.st_size;
-    map = mmap(NULL, FILESIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-    if (map == MAP_FAILED) 
-    {
-      close(fd);
-      perror("Error mmapping the file for reading");
-    	exit(EXIT_FAILURE);
-    }
     char temp[1000];
-    strcpy(temp,map+lines_read);
-	  if(isSelfMsg(temp)==0)
+    //strcpy(temp,map+lines_read);
+	 //lines_read=strlen(map);
+       
+      sleep(5);
+    res=mq_receive(fd,temp,998,NULL);
+    printf("res=%d , %s\n",res, temp);
+    sleep(2);
+    if(res==0)
     {
-	   printf("%s\n",temp);
+      sleep(10);
+      printf("\nwas here with res = %d",res);
     }
-	 lines_read=strlen(map);
+    else
+    {
+      
+    }
+
     close(fd);
 	}while(1);
 
@@ -237,7 +215,10 @@ fprintf(stderr,"\nThis program takes no command line argument\n");
 print_usage(argv[0]);
 return EXIT_FAILURE;
 }
-
+  
+  struct sigevent sigevent;
+  signal (handler);
+  //sigevent.sigev_signo = SIGUSR1;
   atexit(ex);
 	pthread_t read_th, write_th;
 	int err;
@@ -246,19 +227,20 @@ return EXIT_FAILURE;
 	//wsem=sem_open(WSEM,O_CREAT|O_RDWR,(mode_t)0644,1);
   //rsem=sem_open(RSEM,O_CREAT|O_RDWR,(mode_t)0644,0);
   mqd_t fd=mq_open(MNAME,O_CREAT|O_RDWR,(mode_t)0644,NULL);
-  if(fd==-1)
+  if(fd==(mqd_t)-1)
   {
     perror("mq_open failed");
     exit(EXIT_FAILURE);
   }
   else
   {
-  close(mqd_t);  
+  close(fd);  
   }
+  err=pthread_create(&read_th,NULL,&reader,NULL);
+  if(err!=0)perror("Error creating consumer thread");
   err=pthread_create(&write_th,NULL,&writer,NULL);
 	if(err!=0)perror("Error creating producer thread");
-	err=pthread_create(&read_th,NULL,&reader,NULL);
-	if(err!=0)perror("Error creating consumer thread");
+	
 	pthread_join(read_th,NULL);
 	pthread_join(write_th,NULL);
 
