@@ -4,8 +4,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
-//#include <sys/mman.h>
-//#include <semaphore.h>
 #include <pthread.h>
 #include <sys/types.h>
 #include <mqueue.h>
@@ -38,10 +36,8 @@ exit(EXIT_SUCCESS);
 void* writer(void* arg)
 {
   struct mq_attr attr;
-  //attr.mq_flags=O_NONBLOCK;
     attr.mq_maxmsg = 100;
     attr.mq_msgsize = 800;
-   //attr.mq_curmsgs = 0;
 	int res;
   mqd_t fd;
   int exit_cond=1;
@@ -71,74 +67,47 @@ printf("Message Queue:\n");
             perror("Send error");
             exit(EXIT_FAILURE);
           }
-          if(res==0)
-          {
-            printf("Successful write to mq\n");
-          }
           mq_close(fd);
 
 
     }
 	}while(exit_cond!=0);
 
-	
-    
   exit(EXIT_SUCCESS);
 	return NULL;
 }
-///////////////////////////////////////////////////////was here resume
+
 void* reader(void* arg)
 {
 
 	int res;
   mqd_t fd;
- //  struct mq_attr attr;
-
-    //attr.mq_flags=0;
-    //attr.mq_maxmsg = 100;
-  //  attr.mq_msgsize = 330;
-    //attr.mq_curmsgs = 0;
-
-    fd=mq_open(MNAME,O_RDONLY);//,0644,&attr);
+    
 	  do
     { 
-      sleep(5);
-    
+      fd=mq_open(MNAME,O_RDONLY);
      if (fd == (mqd_t)-1) 
       {
       perror("Queue opening in read failed");
        exit(EXIT_FAILURE);
       }
-      /*if(mq_getattr(fd,&attr)==-1)
-      {
-        perror("mq_getattr errored");
-        exit(EXIT_FAILURE);
-      }
-      attr.mq_flags|=O_NONBLOCK;
-      if (mq_setattr(fd,&attr,NULL)==-1)
-      {
-        perror("mq_setattr failed");
-        exit(EXIT_FAILURE);
-      }
-*/
       char temp[16096];
     res=mq_receive(fd,temp,sizeof(temp),NULL);
     if(res>=0)
     {
-    //printf("res=%d , %s\n",res, temp);
     temp[res]='\0';
     printf("Received [%d] : %s\n",res,temp);
-  }
+    }
   else
   {
     printf("%d\n", res);
     perror("receive fail:");
   }
 
-    //mq_close(fd);
+mq_close(fd);
 	}while(1);
 
-mq_close(fd);
+
 	return NULL;
 }
 
@@ -177,16 +146,6 @@ return EXIT_FAILURE;
   atexit(ex);
 	pthread_t read_th, write_th;
 	int err;
-  //struct mq_attr attr;
-
-    //attr.mq_flags=0;
-    //attr.mq_maxmsg = 100;
-    //attr.mq_msgsize = 800;
-    //attr.mq_curmsgs = 0;
-  //count=sem_open(COUNT,O_CREAT|O_RDWR,(mode_t)0644,0);
-  //sem_post(count);
-	//wsem=sem_open(WSEM,O_CREAT|O_RDWR,(mode_t)0644,1);
-  //rsem=sem_open(RSEM,O_CREAT|O_RDWR,(mode_t)0644,0);
   mqd_t fd=mq_open(MNAME,O_CREAT|O_RDWR,(mode_t)0644,NULL);
   if(fd==(mqd_t)-1)
   {
